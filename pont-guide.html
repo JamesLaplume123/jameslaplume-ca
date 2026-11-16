@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Pont JARVIS</title><meta name="robots" content="noindex">
+<script>
+/* Pont vers le JARVIS du site : ce cadre, servi par jameslaplume.ca (origine acceptée par le portier),
+   relaie les questions de jarvisprivatesystems.com et renvoie la réponse morceau par morceau. */
+(function () {
+  var GUIDE = "https://guide.jarvisprivatesystems.com";
+  var OK = ["https://jarvisprivatesystems.com", "https://www.jarvisprivatesystems.com", "https://jameslaplume.ca", "https://www.jameslaplume.ca", "http://localhost:8765", "http://localhost:8080"];
+  window.addEventListener("message", function (e) {
+    if (OK.indexOf(e.origin) < 0 || !e.data || e.data.jv !== "chat" || !e.data.body) return;
+    var src = e.source, o = e.origin, id = e.data.id;
+    function envoie(m) { m.id = id; m.jv = "pont"; try { src.postMessage(m, o); } catch (x) {} }
+    fetch(GUIDE + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(e.data.body) })
+      .then(function (r) {
+        var type = r.headers.get("Content-Type") || "";
+        if (type.indexOf("text/event-stream") < 0 || !r.body || !r.body.getReader) {
+          return r.json().catch(function () { return {}; }).then(function (d) { envoie({ json: d }); });
+        }
+        var rd = r.body.getReader(), dec = new TextDecoder(), t = "";
+        function lis() {
+          return rd.read().then(function (res) {
+            if (res.done) return;
+            t += dec.decode(res.value, { stream: true });
+            var b = t.split("\n\n"); t = b.pop();
+            b.forEach(function (x) { if (x.indexOf("data: ") === 0) envoie({ sse: x.slice(6) }); });
+            return lis();
+          });
+        }
+        return lis();
+      })
+      .then(function () { envoie({ fin: 1 }); })
+      .catch(function (err) { envoie({ err: String(err && err.message || err) }); });
+  });
+  if (window.parent !== window) window.parent.postMessage({ jv: "pont-pret" }, "*");
+})();
+</script>
+</head><body></body></html>
